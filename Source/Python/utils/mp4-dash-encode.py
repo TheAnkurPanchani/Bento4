@@ -112,8 +112,8 @@ def main():
                       help="Minimum bitrate (default: 500kbps)", default=500.0)
     parser.add_option('-n', '--max-video-bitrate', dest='max_bitrate', type='float',
                       help="Max Video bitrate (default: 2mbps)", default=2000.0)
-    parser.add_option('--audio-codec', dest='audio_codec', default='libfdk_aac',
-                      help='Audio Codec: libfdk_aac (default) or aac')
+    parser.add_option('--audio-codec', dest='audio_codec', default='aac',
+                      help='Audio Codec: libfdk_aac or aac (default)')
     parser.add_option('-c', '--video-codec', dest='video_codec', default='libx264',
                       help="Video Codec: libx264 (default) or libx265")
     parser.add_option('-a', '--audio-bitrate', dest='audio_bitrate', type='int',
@@ -167,6 +167,9 @@ def main():
     for i in range(options.bitrates):
         output_filename = path.join(options.output_dir, 'video_%05d.mp4' % int(bitrates[i]))
         temp_filename = output_filename+'_'
+        if os.path.exists(temp_filename):
+            print('%s already processed, %s already exists. continuing...')%(bitrates[i], temp_filename)
+            continue
         base_cmd  = 'ffmpeg -i %s -strict experimental -codec:a %s -ac 2 -ab %dk -preset slow -map_metadata -1 -codec:v %s' % (quote(args[0]), options.audio_codec, options.audio_bitrate, options.video_codec)
         if options.video_codec == 'libx264':
             base_cmd += ' -profile:v baseline'
@@ -196,9 +199,9 @@ def main():
         video_opts = "-force_key_frames 'expr:eq(mod(n,%d),0)'" % (options.segment_size)
         video_opts += " -bufsize %dk -maxrate %dk" % (bitrates[i], int(bitrates[i]*1.5))
         if options.video_codec == 'libx264':
-            video_opts += " -x264opts rc-lookahead=%d" % (options.segment_size)
+            video_opts += " -x264opts rc-lookahead=%d:keyint=%d:min-keyint=%d" % (options.segment_size, options.segment_size * 2, options.segment_size)
         elif options.video_codec == 'libx265':
-            video_opts += ' -x265-params "no-open-gop=1:keyint=%d:no-scenecut=1:profile=main"' % (options.segment_size)
+            video_opts += ' -x265-params "no-open-gop=1:keyint=%d:min-keyint=%d:no-scenecut=1:profile=main"' % (options.segment_size)
         if options.encoder_params:
             video_opts += ' ' + options.encoder_params
         cmd = base_cmd+' '+video_opts+' -s '+str(resolutions[i][0])+'x'+str(resolutions[i][1])+' -f mp4 '+temp_filename
